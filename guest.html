@@ -5,36 +5,77 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SmartDoor — כניסת אורח</title>
 <style>
+  *{box-sizing:border-box}
   body{margin:0;font-family:'Heebo',system-ui,sans-serif;background:#f4f6f9;color:#1a202c;
-       display:flex;align-items:center;justify-content:center;min-height:100vh}
-  .card{background:#fff;border-radius:18px;box-shadow:0 4px 24px rgba(0,0,0,.08);
-        padding:32px 26px;max-width:340px;width:90%;text-align:center}
-  h1{font-size:22px;margin:0 0 4px}
-  .sub{color:#718096;font-size:14px;margin-bottom:22px}
-  .big-btn{width:100%;padding:16px;font-size:17px;font-weight:700;border:none;border-radius:12px;
+       display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
+  .card{background:#fff;border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,.08);
+        padding:28px 22px;max-width:360px;width:100%;text-align:center}
+  h1{font-size:24px;margin:0 0 2px}
+  .sub{color:#718096;font-size:14px;margin-bottom:20px}
+  .door-emoji{font-size:56px;margin-bottom:6px}
+
+  /* steps explainer */
+  .steps{text-align:right;background:#f7fafc;border-radius:14px;padding:14px 16px;margin-bottom:20px}
+  .step{display:flex;gap:12px;align-items:flex-start;padding:8px 0;font-size:15px;line-height:1.5}
+  .step .n{background:#0b7a62;color:#fff;min-width:26px;height:26px;border-radius:50%;
+           display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;margin-top:1px}
+  .step b{color:#0b7a62}
+  .step.done .n{background:#48bb78}
+  .step.active{background:#e6faf5;border-radius:10px;padding-inline:8px;margin-inline:-8px}
+
+  .big-btn{width:100%;padding:18px;font-size:19px;font-weight:800;border:none;border-radius:14px;
            background:#0b7a62;color:#fff;cursor:pointer;font-family:inherit}
-  .big-btn:disabled{background:#a0aec0;cursor:not-allowed}
-  .status{margin-top:18px;font-size:14px;min-height:42px;line-height:1.5}
-  .status.ok{color:#0b7a62;font-weight:700;font-size:17px}
-  .status.err{color:#c53030}
-  .note{font-size:12px;color:#a0aec0;margin-top:18px;line-height:1.6}
-  .door-emoji{font-size:52px;margin-bottom:8px}
+  .big-btn:disabled{background:#a0aec0}
+  .big-btn.success{background:#48bb78}
+
+  .status{margin-top:14px;font-size:15px;min-height:24px;line-height:1.5}
+  .status.ok{color:#0b7a62;font-weight:800;font-size:20px}
+  .status.err{color:#c53030;font-weight:600}
+
+  .hint{display:none;background:#fffbea;border:1px solid #f6cf6b;border-radius:12px;
+        padding:12px;margin-top:14px;font-size:14px;line-height:1.6;text-align:right}
+  .hint.show{display:block}
+  .hint b{color:#975a16}
+
+  .expired-box{display:none;background:#fed7d7;border-radius:12px;padding:16px;font-size:15px;line-height:1.6}
+  .expired-box.show{display:block}
+
+  .note{font-size:11px;color:#a0aec0;margin-top:16px;line-height:1.6}
   .spin{display:inline-block;width:16px;height:16px;border:2px solid #cbd5e0;border-top-color:#0b7a62;
         border-radius:50%;animation:s .7s linear infinite;vertical-align:middle;margin-inline-end:6px}
   @keyframes s{to{transform:rotate(360deg)}}
+  .pulse{animation:p 1.2s ease-in-out infinite}
+  @keyframes p{50%{transform:scale(1.03)}}
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="door-emoji">🚪</div>
-  <h1>כניסה לבניין</h1>
-  <div class="sub" id="doorName">SmartDoor</div>
-  <button class="big-btn" id="openBtn">פתח את הדלת</button>
-  <div class="status" id="status">עמוד ליד דלת הכניסה ולחץ על הכפתור</div>
+  <div class="door-emoji" id="bigIcon">📦</div>
+  <h1>שליח? ברוך הבא</h1>
+  <div class="sub" id="doorName">קיבלת אישור כניסה לבניין</div>
+
+  <div class="steps" id="steps">
+    <div class="step" id="st1"><div class="n">1</div><div>עמוד <b>ליד דלת הכניסה</b> של הבניין</div></div>
+    <div class="step" id="st2"><div class="n">2</div><div>לחץ על הכפתור הירוק למטה</div></div>
+    <div class="step" id="st3"><div class="n">3</div><div>ברשימה שתיפתח — לחץ על <b id="devName">SmartDoor</b> ואז על <b>PAIR / התאם</b></div></div>
+  </div>
+
+  <div class="expired-box" id="expiredBox">
+    ⏰ <b>הקישור כבר לא בתוקף.</b><br>
+    בקש מהדייר לשלוח קישור חדש — זה לוקח לו 5 שניות.
+  </div>
+
+  <button class="big-btn pulse" id="openBtn">🔓 פתח את הדלת</button>
+  <div class="status" id="status"></div>
+
+  <div class="hint" id="btHint">
+    <b>נדרש אישור חד-פעמי:</b> הדפדפן יבקש הרשאת Bluetooth / "מכשירים בקרבת מקום".
+    לחץ <b>אישור/Allow</b> — בלי זה הדלת לא יכולה להיפתח.
+  </div>
+
   <div class="note">
-    הקישור חד-פעמי ופג אוטומטית.<br>
-    נדרש דפדפן Chrome (אנדרואיד) עם Bluetooth פעיל.<br>
-    iPhone: פתח את הקישור באפליקציית Bluefy.
+    קישור חד-פעמי · פג אוטומטית · מאובטח<br>
+    אנדרואיד: Chrome או Samsung Internet · iPhone: אפליקציית Bluefy
   </div>
 </div>
 
@@ -46,73 +87,73 @@ const RESPONSE_UUID = '6e400006-b5a3-f393-e0a9-e50e24dcca9e';
 const RESP_OK = 0x00;
 
 const $ = id => document.getElementById(id);
-
-// Parse link fragment: #d=<bleName>&t=<base64url token>
 const params = new URLSearchParams(location.hash.slice(1));
 const doorName = params.get('d');
 const tokenB64 = params.get('t');
 
 function b64urlToBytes(s) {
   s = s.replace(/-/g, '+').replace(/_/g, '/');
-  const bin = atob(s);
-  return Uint8Array.from(bin, c => c.charCodeAt(0));
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+}
+function fail(msgHtml, boxToo) {
+  $('status').innerHTML = msgHtml; $('status').className = 'status err';
+  $('openBtn').disabled = true; $('openBtn').classList.remove('pulse');
+  if (boxToo) { $('expiredBox').classList.add('show'); $('steps').style.display = 'none'; }
 }
 
 let token = null;
 if (!doorName || !tokenB64) {
-  $('status').textContent = 'קישור לא תקין — בקש קישור חדש מהדייר';
-  $('status').className = 'status err';
-  $('openBtn').disabled = true;
+  fail('קישור לא תקין — בקש קישור חדש מהדייר', true);
 } else {
-  $('doorName').textContent = doorName;
+  $('devName').textContent = doorName;
   try {
     token = b64urlToBytes(tokenB64);
-    // Client-side expiry hint (real check happens on the device)
     const expiry = new DataView(token.buffer).getUint32(32, true);
-    if (Date.now() / 1000 > expiry) {
-      $('status').textContent = 'הקישור פג תוקף — בקש קישור חדש מהדייר';
-      $('status').className = 'status err';
-      $('openBtn').disabled = true;
-    }
-  } catch (e) {
-    $('status').textContent = 'קישור פגום';
-    $('status').className = 'status err';
-    $('openBtn').disabled = true;
+    if (Date.now() / 1000 > expiry) fail('', true);
+  } catch (e) { fail('קישור פגום — בקש קישור חדש', true); }
+}
+
+function setStep(n) {
+  for (let i = 1; i <= 3; i++) {
+    $('st'+i).className = 'step' + (i < n ? ' done' : i === n ? ' active' : '');
+    if (i < n) $('st'+i).querySelector('.n').textContent = '✓';
   }
 }
+setStep(2);   // step 1 is on the courier; highlight the button step
 
 $('openBtn').onclick = async () => {
   if (!navigator.bluetooth) {
-    $('status').innerHTML = 'הדפדפן לא תומך ב-Bluetooth.<br>פתח ב-Chrome (אנדרואיד) או Bluefy (iPhone).';
-    $('status').className = 'status err';
+    fail('הדפדפן לא תומך — פתח את הקישור ב-Chrome<br>(iPhone: אפליקציית Bluefy)');
     return;
   }
   const btn = $('openBtn'), st = $('status');
-  btn.disabled = true;
+  btn.disabled = true; btn.classList.remove('pulse');
   st.className = 'status';
+  $('btHint').classList.add('show');   // heads-up about the permission prompt
+  setStep(3);
+
   try {
-    st.innerHTML = '<span class="spin"></span>מחפש את הדלת…';
+    st.innerHTML = '<span class="spin"></span>עכשיו בחר את הדלת ברשימה ולחץ PAIR';
     const device = await navigator.bluetooth.requestDevice({
       filters: [{ name: doorName }],
       optionalServices: [SERVICE_UUID]
     });
+    $('btHint').classList.remove('show');
 
-    st.innerHTML = '<span class="spin"></span>מתחבר…';
+    st.innerHTML = '<span class="spin"></span>מתחבר לדלת…';
     const server  = await device.gatt.connect();
     const service = await server.getPrimaryService(SERVICE_UUID);
 
-    // Listen for the door's verdict before writing the token
     const respChar = await service.getCharacteristic(RESPONSE_UUID);
     const verdict = new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('timeout')), 8000);
       respChar.addEventListener('characteristicvaluechanged', e => {
-        clearTimeout(timer);
-        resolve(e.target.value.getUint8(0));
+        clearTimeout(timer); resolve(e.target.value.getUint8(0));
       }, { once: true });
     });
     await respChar.startNotifications();
 
-    st.innerHTML = '<span class="spin"></span>שולח אישור כניסה…';
+    st.innerHTML = '<span class="spin"></span>פותח…';
     const guestChar = await service.getCharacteristic(GUEST_UUID);
     await guestChar.writeValue(token);
 
@@ -120,20 +161,31 @@ $('openBtn').onclick = async () => {
     device.gatt.disconnect();
 
     if (code === RESP_OK) {
-      st.textContent = '✅ הדלת נפתחה — ברוך הבא!';
+      setStep(4);
+      $('bigIcon').textContent = '🚪✨';
+      st.textContent = 'הדלת נפתחה — ברוך הבא!';
       st.className = 'status ok';
-      btn.textContent = 'הדלת נפתחה';
+      btn.textContent = '✅ הדלת נפתחה';
+      btn.className = 'big-btn success';
+      if (navigator.vibrate) navigator.vibrate(200);
     } else {
-      st.textContent = 'הכניסה נדחתה — הקישור פג או כבר נוצל';
-      st.className = 'status err';
-      btn.disabled = false;
+      fail('', true);
     }
   } catch (e) {
-    st.textContent = e.message === 'timeout'
-      ? 'אין תגובה מהדלת — נסה שוב קרוב יותר'
-      : 'החיבור נכשל — ודא ש-Bluetooth פעיל ונסה שוב';
-    st.className = 'status err';
-    btn.disabled = false;
+    $('btHint').classList.remove('show');
+    if (e.name === 'NotFoundError') {
+      // user cancelled the chooser or device not in range
+      st.innerHTML = 'לא נבחרה דלת.<br>ודא שאתה <b>ליד הדלת</b> ונסה שוב';
+      st.className = 'status err';
+    } else if (e.message === 'timeout') {
+      st.textContent = 'אין תגובה מהדלת — התקרב ונסה שוב';
+      st.className = 'status err';
+    } else {
+      st.innerHTML = 'החיבור נכשל — ודא ש-Bluetooth פעיל ונסה שוב';
+      st.className = 'status err';
+    }
+    $('openBtn').disabled = false; $('openBtn').classList.add('pulse');
+    setStep(2);
   }
 };
 </script>

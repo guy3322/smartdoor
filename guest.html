@@ -61,8 +61,8 @@
   </div>
 
   <div class="expired-box" id="expiredBox">
-    ⏰ <b>הקישור כבר לא בתוקף.</b><br>
-    בקש מהדייר לשלוח קישור חדש — זה לוקח לו 5 שניות.
+    <span id="expiredText">⏰ <b>הקישור כבר לא בתוקף.</b><br>
+    בקש מהדייר לשלוח קישור חדש — זה לוקח לו 5 שניות.</span>
   </div>
 
   <button class="big-btn pulse" id="openBtn">🔓 פתח את הדלת</button>
@@ -95,11 +95,15 @@ function b64urlToBytes(s) {
   s = s.replace(/-/g, '+').replace(/_/g, '/');
   return Uint8Array.from(atob(s), c => c.charCodeAt(0));
 }
-function fail(msgHtml, boxToo) {
+function fail(msgHtml, boxToo, boxHtml) {
   $('status').innerHTML = msgHtml; $('status').className = 'status err';
   $('openBtn').disabled = true; $('openBtn').classList.remove('pulse');
-  if (boxToo) { $('expiredBox').classList.add('show'); $('steps').style.display = 'none'; }
+  if (boxToo) {
+    if (boxHtml) $('expiredText').innerHTML = boxHtml;
+    $('expiredBox').classList.add('show'); $('steps').style.display = 'none';
+  }
 }
+const USED_MSG = '🔒 <b>הקישור כבר נוצל.</b><br>כל קישור פותח את הדלת פעם אחת בלבד. בקש מהדייר קישור חדש.';
 
 let token = null;
 if (!doorName || !tokenB64) {
@@ -169,7 +173,9 @@ $('openBtn').onclick = async () => {
       btn.className = 'big-btn success';
       if (navigator.vibrate) navigator.vibrate(200);
     } else {
-      fail('', true);
+      // Device rejected a well-formed token — almost always already used
+      // (expiry is pre-checked client-side before we ever connect).
+      fail('', true, USED_MSG);
     }
   } catch (e) {
     $('btHint').classList.remove('show');

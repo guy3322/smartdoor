@@ -126,6 +126,10 @@ function setStep(n) {
 }
 setStep(2);   // step 1 is on the courier; highlight the button step
 
+// Cache the picked device — Web Bluetooth remembers the pairing for this
+// origin, so re-opening (multi-use tokens) can skip the chooser entirely.
+let knownDevice = null;
+
 $('openBtn').onclick = async () => {
   if (!navigator.bluetooth) {
     fail('הדפדפן לא תומך — פתח את הקישור ב-Chrome<br>(iPhone: אפליקציית Bluefy)');
@@ -134,16 +138,20 @@ $('openBtn').onclick = async () => {
   const btn = $('openBtn'), st = $('status');
   btn.disabled = true; btn.classList.remove('pulse');
   st.className = 'status';
-  $('btHint').classList.add('show');   // heads-up about the permission prompt
   setStep(3);
 
   try {
-    st.innerHTML = '<span class="spin"></span>עכשיו בחר את הדלת ברשימה ולחץ PAIR';
-    const device = await navigator.bluetooth.requestDevice({
-      filters: [{ name: doorName }],
-      optionalServices: [SERVICE_UUID]
-    });
-    $('btHint').classList.remove('show');
+    let device = knownDevice;
+    if (!device) {
+      $('btHint').classList.add('show');   // heads-up about the permission prompt
+      st.innerHTML = '<span class="spin"></span>עכשיו בחר את הדלת ברשימה ולחץ PAIR';
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ name: doorName }],
+        optionalServices: [SERVICE_UUID]
+      });
+      knownDevice = device;
+      $('btHint').classList.remove('show');
+    }
 
     st.innerHTML = '<span class="spin"></span>מתחבר לדלת…';
     const server  = await device.gatt.connect();
@@ -196,6 +204,9 @@ $('openBtn').onclick = async () => {
       st.textContent = 'אין תגובה מהדלת — התקרב ונסה שוב';
       st.className = 'status err';
     } else {
+      // A cached device may be out of range or its GATT server gone stale —
+      // drop it so the retry re-opens the chooser instead of failing silently.
+      knownDevice = null;
       st.innerHTML = 'החיבור נכשל — ודא ש-Bluetooth פעיל ונסה שוב';
       st.className = 'status err';
     }

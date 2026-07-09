@@ -105,7 +105,7 @@ function fail(msgHtml, boxToo, boxHtml) {
 }
 const USED_MSG = '🔒 <b>הקישור כבר נוצל.</b><br>כל קישור פותח את הדלת פעם אחת בלבד. בקש מהדייר קישור חדש.';
 
-let token = null;
+let token = null, multiUse = false;
 if (!doorName || !tokenB64) {
   fail('קישור לא תקין — בקש קישור חדש מהדייר', true);
 } else {
@@ -113,6 +113,7 @@ if (!doorName || !tokenB64) {
   try {
     token = b64urlToBytes(tokenB64);
     const expiry = new DataView(token.buffer).getUint32(32, true);
+    multiUse = token.length > 44 && (token[44] & 0x01) === 1;   // flags byte after nonce
     if (Date.now() / 1000 > expiry) fail('', true);
   } catch (e) { fail('קישור פגום — בקש קישור חדש', true); }
 }
@@ -169,9 +170,17 @@ $('openBtn').onclick = async () => {
       $('bigIcon').textContent = '🚪✨';
       st.textContent = 'הדלת נפתחה — ברוך הבא!';
       st.className = 'status ok';
-      btn.textContent = '✅ הדלת נפתחה';
-      btn.className = 'big-btn success';
       if (navigator.vibrate) navigator.vibrate(200);
+      if (multiUse) {
+        // Reusable until expiry — let the guest open again (exit / re-entry)
+        btn.textContent = '🔓 פתח שוב';
+        btn.className = 'big-btn';
+        btn.disabled = false;
+        setStep(2);
+      } else {
+        btn.textContent = '✅ הדלת נפתחה';
+        btn.className = 'big-btn success';
+      }
     } else {
       // Device rejected a well-formed token — almost always already used
       // (expiry is pre-checked client-side before we ever connect).

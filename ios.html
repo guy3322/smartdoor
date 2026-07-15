@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SmartDoor">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SmartDoor</title>
+<script src="https://unpkg.com/mqtt@5.7.0/dist/mqtt.min.js"></script>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Heebo',system-ui,sans-serif;background:#0a0c10;color:#e8eaf0;
+       display:flex;align-items:center;justify-content:center;min-height:100vh;padding:18px}
+  .card{background:#12151c;border:1px solid #252c3a;border-radius:22px;padding:30px 24px;
+        max-width:360px;width:100%;text-align:center}
+  h1{font-size:24px;margin:0 0 4px}.sub{color:#8892a4;font-size:14px;margin-bottom:24px}
+  .door{font-size:60px;margin-bottom:6px}
+  .big{width:100%;padding:20px;font-size:20px;font-weight:800;border:none;border-radius:16px;
+       background:#00d4aa;color:#04211b;font-family:inherit;cursor:pointer;margin-bottom:10px}
+  .big:disabled{background:#3a4356;color:#8892a4}
+  .big.success{background:#48bb78}
+  .ghost{width:100%;padding:14px;font-size:15px;font-weight:700;border:1px solid #252c3a;border-radius:14px;
+         background:#1a1f2b;color:#00d4aa;font-family:inherit;cursor:pointer}
+  .status{margin-top:16px;font-size:15px;min-height:24px}
+  .status.ok{color:#00d4aa;font-weight:800}.status.err{color:#ff6b35}
+  .note{font-size:12px;color:#5a6474;margin-top:20px;line-height:1.7}
+  .spin{display:inline-block;width:15px;height:15px;border:2px solid #3a4356;border-top-color:#00d4aa;
+        border-radius:50%;animation:s .7s linear infinite;vertical-align:middle;margin-inline-end:6px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  .setup{background:#1a1f2b;border-radius:14px;padding:16px;margin-bottom:18px;font-size:14px;line-height:1.6}
+  .setup b{color:#00d4aa}
+  .doors{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
+  .apt{font-family:'Space Mono',monospace;color:#f5c842;font-size:13px;margin-bottom:16px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="door">🚪</div>
+  <h1>Smart<span style="color:#00d4aa">Door</span></h1>
+  <div class="sub" id="sub">פתיחת דלת מכל מקום</div>
+  <div class="apt" id="aptLine"></div>
+
+  <div id="setupBox" class="setup" style="display:none">
+    ✅ <b>ההפעלה הושלמה!</b><br>
+    לגישה מהירה: לחץ על <b>שתף ⬆️</b> בספארי → <b>הוסף למסך הבית</b>.
+    מכאן האפליקציה תיפתח כמו אפליקציה רגילה.
+  </div>
+
+  <div class="doors" id="doorButtons"></div>
+
+  <div class="status" id="status"></div>
+
+  <div class="note" id="note">
+    מאובטח בהצפנה · פתיחה מרחוק דרך האינטרנט<br>
+    לפתיחה אוטומטית בהתקרבות — בקש מהוועד תג BLE
+  </div>
+</div>
+
+<script>
+// ── EMQX broker (WebSocket over TLS) ──────────────────────────────────────────
+const WSS  = 'wss://y010790d.ala.eu-central-1.emqxsl.com:8084/mqtt';
+const USER = 'SmartDoor', PASS = 'guy565600';
+const STORE_KEY = 'smartdoor_creds_v1';
+
+const $ = id => document.getElementById(id);
+
+// ── Crypto (Web Crypto API — matches ESP32 SDREMOTE flow) ─────────────────────
+function b64urlToBytes(s){s=s.replace(/-/g,'+').replace(/_/g,'/');return Uint8Array.from(atob(s),c=>c.charCodeAt(0));}
+function hex(bytes){return [...bytes].map(b=>b.toString(16).padStart(2,'0')).join('');}
+
+async function hmacSha256(keyBytes, msgBytes){
+  const k = await crypto.subtle.importKey('raw', keyBytes, {name:'HMAC',hash:'SHA-256'}, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', k, msgBytes));
+}
+
+// Remote-unlock packet: deviceId[32] | counter[4 LE] | hmac[32]  (68 bytes)
+// hmac = HMAC-SHA256(key, "SDREMOTE" | deviceId[32] | counter[4 LE])
+async function buildPacket(deviceId, counter, keyBytes){
+  const enc = new TextEncoder();
+  const idBytes = new Uint8Array(32); idBytes.set(enc.encode(deviceId).slice(0,32));
+  const ctr = new Uint8Array(4); new DataView(ctr.buffer).setUint32(0, counter, true);
+  const prefix = enc.encode('SDREMOTE');
+  const msg = new Uint8Array(prefix.length + 32 + 4);
+  msg.set(prefix, 0); msg.set(idBytes, prefix.length); msg.set(ctr, prefix.length+32);
+  const mac = await hmacSha256(keyBytes, msg);
+  const pkt = new Uint8Array(68);
+  pkt.set(idBytes,0); pkt.set(ctr,32); pkt.set(mac,36);
+  return pkt;
+}
+
+// ── Credential store (localStorage) ───────────────────────────────────────────
+function loadCreds(){ try{return JSON.parse(localStorage.getItem(STORE_KEY));}catch(_){return null;} }
+function saveCreds(c){ localStorage.setItem(STORE_KEY, JSON.stringify(c)); }
+
+// ── One-time setup from the admin link (#id=..&k=..&d=..&n=..) ─────────────────
+(function setup(){
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (p.get('id') && p.get('k') && p.get('d')){
+    const creds = loadCreds() || { doors:{} };
+    creds.doors[p.get('d')] = {
+      id: p.get('id'),
+      key: hex(b64urlToBytes(p.get('k'))),
+      counter: 0,
+      name: p.get('n') ? decodeURIComponent(p.get('n')) : ''
+    };
+    saveCreds(creds);
+    history.replaceState(null,'',location.pathname);   // strip the secret from the URL
+    $('setupBox').style.display = 'block';
+  }
+})();
+
+// ── Render door buttons ───────────────────────────────────────────────────────
+function render(){
+  const creds = loadCreds();
+  const box = $('doorButtons'); box.innerHTML = '';
+  if (!creds || Object.keys(creds.doors||{}).length === 0){
+    $('sub').textContent = 'לא מופעל';
+    box.innerHTML = '<div class="note">פתח את קישור ההפעלה שקיבלת מהוועד כדי להתחיל.</div>';
+    $('note').style.display='none';
+    return;
+  }
+  const anyName = Object.values(creds.doors).find(d=>d.name)?.name;
+  if (anyName) $('aptLine').textContent = anyName;
+  for (const [door, c] of Object.entries(creds.doors)){
+    const btn = document.createElement('button');
+    btn.className = 'big';
+    btn.textContent = '🔓 ' + door.replace('SmartDoor-','');
+    btn.onclick = () => unlock(door, btn);
+    box.appendChild(btn);
+  }
+}
+
+// ── Unlock over MQTT ──────────────────────────────────────────────────────────
+let client = null;
+function mqtt(){
+  if (client && client.connected) return Promise.resolve(client);
+  return new Promise((resolve,reject)=>{
+    client = window.mqtt.connect(WSS, {
+      username:USER, password:PASS, clean:true, connectTimeout:8000,
+      clientId:'ios-'+Math.random().toString(16).slice(2,10)
+    });
+    client.on('connect', ()=>resolve(client));
+    client.on('error', e=>reject(e));
+    setTimeout(()=>reject(new Error('timeout')), 9000);
+  });
+}
+
+async function unlock(door, btn){
+  const st = $('status'); st.className='status';
+  btn.disabled = true;
+  const creds = loadCreds(); const c = creds.doors[door];
+  try{
+    st.innerHTML = '<span class="spin"></span>מתחבר…';
+    const cl = await mqtt();
+    const respTopic = `sd/${door}/resp`;
+    const verdict = new Promise((resolve,reject)=>{
+      const to = setTimeout(()=>reject(new Error('timeout')), 8000);
+      cl.subscribe(respTopic,{qos:1});
+      cl.on('message',(t,m)=>{ if(t===respTopic){clearTimeout(to);resolve(m.toString());} });
+    });
+    const nextCounter = c.counter + 1;
+    const pkt = await buildPacket(c.id, nextCounter, hexToBytes(c.key));
+    st.innerHTML = '<span class="spin"></span>שולח פקודה…';
+    cl.publish(`sd/${door}/cmd`, pkt, {qos:1});
+    const res = await verdict;
+    if (res === 'OK'){
+      c.counter = nextCounter; saveCreds(creds);
+      st.textContent = '✅ הדלת נפתחה!'; st.className='status ok';
+      btn.className='big success'; setTimeout(()=>{btn.className='big';btn.disabled=false;},3000);
+      if (navigator.vibrate) navigator.vibrate(150);
+    } else {
+      st.textContent = 'הפתיחה נדחתה — נסה שוב'; st.className='status err'; btn.disabled=false;
+    }
+  }catch(e){
+    st.textContent = e.message==='timeout' ? 'הדלת לא הגיבה — ודא שהיא מחוברת לאינטרנט'
+                                           : 'שגיאת חיבור — נסה שוב';
+    st.className='status err'; btn.disabled=false;
+  }
+}
+function hexToBytes(h){const a=new Uint8Array(h.length/2);for(let i=0;i<a.length;i++)a[i]=parseInt(h.substr(i*2,2),16);return a;}
+
+render();
+</script>
+</body>
+</html>

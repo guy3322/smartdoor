@@ -160,13 +160,16 @@ async function unlock(door, btn){
       cl.subscribe(respTopic,{qos:1});
       cl.on('message',(t,m)=>{ if(t===respTopic){clearTimeout(to);resolve(m.toString());} });
     });
-    const nextCounter = c.counter + 1;
+    // Counter = current unix time (seconds). Always advances, so multiple
+    // browsers/devices sharing one credential never desync — and a captured
+    // packet still can't be replayed (its timestamp falls behind after any
+    // later unlock). Fits uint32 until year 2106.
+    const nextCounter = Math.floor(Date.now() / 1000);
     const pkt = await buildPacket(c.id, nextCounter, hexToBytes(c.key));
     st.innerHTML = '<span class="spin"></span>שולח פקודה…';
     cl.publish(`sd/${door}/cmd`, pkt, {qos:1});
     const res = await verdict;
     if (res === 'OK'){
-      c.counter = nextCounter; saveCreds(creds);
       st.textContent = '✅ הדלת נפתחה!'; st.className='status ok';
       btn.className='big success'; setTimeout(()=>{btn.className='big';btn.disabled=false;},3000);
       if (navigator.vibrate) navigator.vibrate(150);

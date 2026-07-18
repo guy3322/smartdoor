@@ -90,6 +90,16 @@ const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.hash.slice(1));
 const doorName = params.get('d');
 const tokenB64 = params.get('t');
+// Optional friendly door name from the resident's app (e.g. "כניסה ראשית") —
+// shown alongside the BLE name so the guest knows what to pick in the chooser.
+const friendly = params.get('n');
+const esc = s => s.replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// The chooser dialog itself is browser-rendered and always shows the BLE name;
+// this label bridges the two: SmartDoor-House (“כניסה ראשית”)
+const pickLabel = doorName
+  ? (friendly ? `<b>${esc(doorName)}</b> (״${esc(friendly)}״)` : `<b>${esc(doorName)}</b>`)
+  : '';
 
 function b64urlToBytes(s) {
   s = s.replace(/-/g, '+').replace(/_/g, '/');
@@ -109,7 +119,8 @@ let token = null, multiUse = false;
 if (!doorName || !tokenB64) {
   fail('קישור לא תקין — בקש קישור חדש מהדייר', true);
 } else {
-  $('devName').textContent = doorName;
+  $('devName').innerHTML = pickLabel;
+  if (friendly) $('doorName').textContent = `קיבלת אישור כניסה — ${friendly}`;
   try {
     token = b64urlToBytes(tokenB64);
     const expiry = new DataView(token.buffer).getUint32(32, true);
@@ -144,7 +155,7 @@ $('openBtn').onclick = async () => {
     let device = knownDevice;
     if (!device) {
       $('btHint').classList.add('show');   // heads-up about the permission prompt
-      st.innerHTML = '<span class="spin"></span>עכשיו בחר את הדלת ברשימה ולחץ PAIR';
+      st.innerHTML = '<span class="spin"></span>עכשיו בחר את ' + pickLabel + ' ברשימה ולחץ PAIR';
       device = await navigator.bluetooth.requestDevice({
         filters: [{ name: doorName }],
         optionalServices: [SERVICE_UUID]

@@ -32,6 +32,17 @@
   .setup b{color:#00d4aa}
   .doors{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
   .apt{font-family:'Space Mono',monospace;color:#f5c842;font-size:13px;margin-bottom:16px}
+  .invite{width:100%;padding:11px;font-size:14px;font-weight:700;border:1px solid #252c3a;border-radius:12px;
+          background:#1a1f2b;color:#f5c842;font-family:inherit;cursor:pointer}
+  .panel{background:#1a1f2b;border:1px solid #252c3a;border-radius:14px;padding:16px;margin:10px 0;text-align:right}
+  .panel h3{margin:0 0 12px;font-size:15px;color:#f5c842}
+  .chips{display:flex;gap:8px;margin-bottom:12px}
+  .chip{flex:1;padding:9px 0;border-radius:10px;border:1px solid #252c3a;background:#12151c;color:#8892a4;
+        font-family:inherit;font-size:14px;font-weight:700;cursor:pointer}
+  .chip.on{background:#00d4aa22;border-color:#00d4aa;color:#00d4aa}
+  .multirow{display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:14px}
+  .multirow input{width:18px;height:18px;accent-color:#00d4aa}
+  .multirow .hint{font-size:12px;color:#5a6474}
 </style>
 </head>
 <body>
@@ -48,6 +59,21 @@
   </div>
 
   <div class="doors" id="doorButtons"></div>
+
+  <div class="panel" id="invitePanel" style="display:none">
+    <h3>🎟 הזמנת אורח — <span id="invDoor"></span></h3>
+    <div class="chips" id="invChips">
+      <button class="chip on" data-h="2">2 שע׳</button>
+      <button class="chip" data-h="6">6 שע׳</button>
+      <button class="chip" data-h="24">24 שע׳</button>
+    </div>
+    <label class="multirow">
+      <input type="checkbox" id="invMulti">
+      <span>כניסה רב-פעמית<br><span class="hint">בלי סימון — הקישור נצרב אחרי פתיחה אחת (מתאים לשליח)</span></span>
+    </label>
+    <button class="big" id="invShare" style="margin-bottom:8px">צור ושתף</button>
+    <button class="ghost" id="invCancel">ביטול</button>
+  </div>
 
   <div class="status" id="status"></div>
 
@@ -129,8 +155,83 @@ function render(){
     btn.textContent = '🔓 ' + door.replace('SmartDoor-','');
     btn.onclick = () => unlock(door, btn);
     box.appendChild(btn);
+
+    const inv = document.createElement('button');
+    inv.className = 'invite';
+    inv.textContent = '🎟 הזמן אורח';
+    inv.onclick = () => openInvite(door);
+    box.appendChild(inv);
   }
 }
+
+// ── Guest invite — token signed offline with this resident's key ─────────────
+// Same 77-byte format as the Android app (CryptoManager.buildGuestToken):
+//   issuerId[32] | expiry[4 LE] | nonce[8] | flags[1] | hmac[32]
+//   hmac = HMAC-SHA256(key, "SDGUEST" | issuerId | expiry | nonce | flags)
+const GUEST_URL = 'https://guy3322.github.io/smartdoor/guest.html';
+let inviteDoor = null;
+
+function bytesToB64url(b){
+  return btoa(String.fromCharCode(...b)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+async function buildGuestToken(deviceId, keyBytes, hours, multiUse){
+  const enc = new TextEncoder();
+  const id = new Uint8Array(32); id.set(enc.encode(deviceId).slice(0,32));
+  const exp = new Uint8Array(4);
+  new DataView(exp.buffer).setUint32(0, Math.floor(Date.now()/1000) + hours*3600, true);
+  const nonce = crypto.getRandomValues(new Uint8Array(8));
+  const flags = new Uint8Array([multiUse ? 1 : 0]);
+  const prefix = enc.encode('SDGUEST');
+  const msg = new Uint8Array(prefix.length + 45);
+  msg.set(prefix,0); msg.set(id,prefix.length); msg.set(exp,prefix.length+32);
+  msg.set(nonce,prefix.length+36); msg.set(flags,prefix.length+44);
+  const mac = await hmacSha256(keyBytes, msg);
+  const tok = new Uint8Array(77);
+  tok.set(id,0); tok.set(exp,32); tok.set(nonce,36); tok.set(flags,44); tok.set(mac,45);
+  return tok;
+}
+
+function openInvite(door){
+  inviteDoor = door;
+  $('invDoor').textContent = door.replace('SmartDoor-','');
+  $('invitePanel').style.display = 'block';
+  $('invitePanel').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+$('invChips').onclick = e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  for (const c of $('invChips').children) c.classList.remove('on');
+  b.classList.add('on');
+};
+$('invCancel').onclick = () => { $('invitePanel').style.display='none'; inviteDoor=null; };
+
+$('invShare').onclick = async () => {
+  if (!inviteDoor) return;
+  const st = $('status'); st.className='status';
+  const hours = +document.querySelector('#invChips .chip.on').dataset.h;
+  const multi = $('invMulti').checked;
+  const c = loadCreds().doors[inviteDoor];
+  try{
+    const tok = await buildGuestToken(c.id, hexToBytes(c.key), hours, multi);
+    const url = GUEST_URL + '#d=' + inviteDoor + '&t=' + bytesToB64url(tok)
+              + '&n=' + encodeURIComponent(inviteDoor.replace('SmartDoor-',''));
+    const validity = hours === 24 ? '24 שעות' : hours + ' שעות';
+    const usage = multi ? 'מאפשר כניסה ויציאה חופשית עד התפוגה' : 'נפתח פעם אחת בלבד';
+    const text = '👋 הוזמנת כאורח — כניסה ל-' + inviteDoor.replace('SmartDoor-','') +
+                 '\nהקישור בתוקף ל-' + validity + ', ' + usage + ':\n' + url;
+    if (navigator.share){
+      await navigator.share({ text });
+    } else {
+      await navigator.clipboard.writeText(text);
+      st.textContent = '📋 הקישור הועתק — הדבק ושלח לאורח'; st.className='status ok';
+    }
+    $('invitePanel').style.display='none'; inviteDoor=null;
+  }catch(e){
+    if (e.name === 'AbortError') return;   // user closed the share sheet
+    st.textContent = 'יצירת הקישור נכשלה — נסה שוב'; st.className='status err';
+  }
+};
 
 // ── Unlock over MQTT ──────────────────────────────────────────────────────────
 let client = null;

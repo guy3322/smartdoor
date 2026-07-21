@@ -1,0 +1,167 @@
+<meta charset="UTF-8">
+<title>SmartDoor — הגדרה למכשירי סמסונג</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --ground:#f6f9f8; --card:#ffffff; --ink:#0f1a17; --ink-soft:#42544e;
+    --ink-faint:#78877f; --line:#e0e8e4; --teal:#00a880; --teal-deep:#087a5f;
+    --teal-wash:#e4f5ef; --amber:#c9730a; --amber-wash:#fbeeda; --shadow:0 1px 2px rgba(15,26,23,.05),0 8px 24px rgba(15,26,23,.06);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --ground:#0b0f0e; --card:#141a18; --ink:#eaf1ee; --ink-soft:#a8b5b0;
+      --ink-faint:#78877f; --line:#242e2b; --teal:#2fd3a6; --teal-deep:#4de0b8;
+      --teal-wash:#0f2a22; --amber:#e8a44a; --amber-wash:#2c2110; --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);}
+  }
+  :root[data-theme="dark"]{ --ground:#0b0f0e; --card:#141a18; --ink:#eaf1ee; --ink-soft:#a8b5b0;
+    --ink-faint:#78877f; --line:#242e2b; --teal:#2fd3a6; --teal-deep:#4de0b8;
+    --teal-wash:#0f2a22; --amber:#e8a44a; --amber-wash:#2c2110; --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);}
+  :root[data-theme="light"]{ --ground:#f6f9f8; --card:#ffffff; --ink:#0f1a17; --ink-soft:#42544e;
+    --ink-faint:#78877f; --line:#e0e8e4; --teal:#00a880; --teal-deep:#087a5f;
+    --teal-wash:#e4f5ef; --amber:#c9730a; --amber-wash:#fbeeda; --shadow:0 1px 2px rgba(15,26,23,.05),0 8px 24px rgba(15,26,23,.06);}
+
+  *{box-sizing:border-box}
+  body{margin:0}
+  .wrap{direction:rtl; background:var(--ground); color:var(--ink); min-height:100vh;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    line-height:1.65; padding:28px 18px 56px; -webkit-font-smoothing:antialiased;}
+  .sheet{max-width:560px; margin:0 auto;}
+
+  .brand{display:flex; align-items:center; gap:12px; margin-bottom:22px;}
+  .logo{width:46px; height:46px; border-radius:13px; background:var(--teal-wash);
+    display:flex; align-items:center; justify-content:center; flex:none;}
+  .logo svg{width:26px; height:26px;}
+  .brand h1{font-size:19px; margin:0; font-weight:700; letter-spacing:-.01em;}
+  .brand p{font-size:13px; margin:1px 0 0; color:var(--ink-faint);}
+
+  .lead{background:var(--card); border:1px solid var(--line); border-radius:16px;
+    padding:18px 20px; box-shadow:var(--shadow); margin-bottom:14px;}
+  .lead h2{font-size:16px; margin:0 0 6px; font-weight:700;}
+  .lead p{margin:0; font-size:14.5px; color:var(--ink-soft);}
+  .lead .mins{display:inline-flex; align-items:center; gap:6px; margin-top:12px;
+    font-size:12.5px; font-weight:600; color:var(--teal-deep); background:var(--teal-wash);
+    padding:5px 11px; border-radius:999px;}
+
+  .step{background:var(--card); border:1px solid var(--line); border-radius:16px;
+    padding:20px; box-shadow:var(--shadow); margin-bottom:14px; position:relative; overflow:hidden;}
+  .step.critical{border-color:color-mix(in srgb,var(--amber) 45%,var(--line));}
+  .step-head{display:flex; align-items:flex-start; gap:13px; margin-bottom:14px;}
+  .num{width:34px; height:34px; border-radius:10px; flex:none; font-weight:700; font-size:16px;
+    display:flex; align-items:center; justify-content:center; background:var(--teal); color:#fff;
+    font-variant-numeric:tabular-nums;}
+  .step.critical .num{background:var(--amber);}
+  .step-head h3{margin:0; font-size:16.5px; font-weight:700; line-height:1.35;}
+  .step-head .tag{font-size:11.5px; font-weight:700; letter-spacing:.03em; color:var(--amber);
+    background:var(--amber-wash); padding:3px 9px; border-radius:999px; display:inline-block; margin-top:6px;}
+
+  .path{direction:rtl; font-size:13px; color:var(--ink-soft); background:var(--ground);
+    border:1px solid var(--line); border-radius:11px; padding:11px 13px; margin:0 0 14px;
+    display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px;}
+  .path b{color:var(--ink); font-weight:600;}
+  .path .sep{color:var(--teal); font-weight:700;}
+  .path .goal{color:var(--teal-deep); font-weight:700;}
+
+  .note{font-size:14px; color:var(--ink-soft); margin:0;}
+  .note strong{color:var(--ink); font-weight:600;}
+
+  /* Illustrated phone snippet */
+  .shot{margin:15px auto 2px; max-width:260px; border:1px solid var(--line);
+    border-radius:16px; overflow:hidden; background:var(--card);}
+  .shot-bar{background:var(--ground); padding:9px 13px; font-size:12.5px; font-weight:600;
+    color:var(--ink-faint); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:7px;}
+  .opt{display:flex; align-items:center; gap:11px; padding:11px 14px; font-size:14px; color:var(--ink-soft);
+    border-bottom:1px solid var(--line);}
+  .opt:last-child{border-bottom:0}
+  .radio{width:18px; height:18px; border-radius:50%; border:2px solid var(--ink-faint); flex:none;}
+  .opt.on{color:var(--ink); font-weight:600;}
+  .opt.on .radio{border-color:var(--teal); background:radial-gradient(circle at center,var(--teal) 0 5px,transparent 6px);}
+  .cap{text-align:center; font-size:12px; color:var(--ink-faint); margin:8px 0 0;}
+
+  .check{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px 20px;
+    box-shadow:var(--shadow); margin-top:20px;}
+  .check h3{margin:0 0 10px; font-size:15px; font-weight:700; display:flex; align-items:center; gap:8px;}
+  .check ul{margin:0; padding-inline-start:20px; font-size:14px; color:var(--ink-soft);}
+  .check li{margin-bottom:6px;}
+  .foot{text-align:center; font-size:12.5px; color:var(--ink-faint); margin-top:26px;}
+  .foot b{color:var(--ink-soft);}
+  svg{display:block}
+</style>
+
+<div class="wrap">
+  <div class="sheet">
+
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--teal-deep)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="6" y="4" width="9" height="16" rx="1.5"/><circle cx="12" cy="12" r="1" fill="var(--teal-deep)" stroke="none"/>
+          <path d="M17 8a4 4 0 0 1 0 8" opacity=".55"/>
+        </svg>
+      </span>
+      <div>
+        <h1>SmartDoor — הגדרה למכשירי סמסונג</h1>
+        <p>הגדרה חד-פעמית · שומרת שהדלת תיפתח לבד בכל פעם</p>
+      </div>
+    </div>
+
+    <div class="lead">
+      <h2>למה זה צריך את זה?</h2>
+      <p>מכשירי סמסונג "מכבים" אפליקציות ברקע כדי לחסוך סוללה. שתי הגדרות קטנות מונעות מהמכשיר לכבות את SmartDoor — כדי שהדלת תמשיך להיפתח אוטומטית כשאתם מתקרבים, גם כשהמסך כבוי.</p>
+      <span class="mins">⏱ לוקח פחות מדקה</span>
+    </div>
+
+    <div class="step critical">
+      <div class="step-head">
+        <span class="num">1</span>
+        <div>
+          <h3>סוללה — "ללא הגבלה"</h3>
+          <span class="tag">החשוב ביותר</span>
+        </div>
+      </div>
+      <div class="path">
+        <b>הגדרות</b><span class="sep">←</span><b>אפליקציות</b><span class="sep">←</span>
+        <b>SmartDoor</b><span class="sep">←</span><b>סוללה</b><span class="sep">←</span>
+        <span class="goal">ללא הגבלה</span>
+      </div>
+      <p class="note">בחרו באפשרות <strong>"ללא הגבלה" (Unrestricted)</strong>. בלי זה, האפליקציה תפסיק לפתוח את הדלת אחרי כמה שעות.</p>
+      <div class="shot" role="img" aria-label="מסך הגדרת סוללה עם האפשרות ללא הגבלה מסומנת">
+        <div class="shot-bar">שימוש בסוללה · SmartDoor</div>
+        <div class="opt on"><span class="radio"></span>ללא הגבלה</div>
+        <div class="opt"><span class="radio"></span>מותאם</div>
+        <div class="opt"><span class="radio"></span>מוגבל</div>
+      </div>
+      <p class="cap">בחרו את האפשרות העליונה</p>
+    </div>
+
+    <div class="step">
+      <div class="step-head">
+        <span class="num">2</span>
+        <div><h3>הרשאות — "אפשר כל הזמן"</h3></div>
+      </div>
+      <div class="path">
+        <b>הגדרות</b><span class="sep">←</span><b>אפליקציות</b><span class="sep">←</span>
+        <b>SmartDoor</b><span class="sep">←</span><b>הרשאות</b>
+      </div>
+      <p class="note">היכנסו ל‑<strong>מיקום</strong> ול‑<strong>מכשירים בקרבת מקום / Bluetooth</strong>, ובכל אחד בחרו <strong>"אפשר כל הזמן"</strong> — ולא "רק בזמן שימוש". כך הסריקה עובדת גם כשהמסך כבוי.</p>
+      <div class="shot" role="img" aria-label="מסך הרשאת מיקום עם האפשרות אפשר כל הזמן מסומנת">
+        <div class="shot-bar">הרשאת מיקום · SmartDoor</div>
+        <div class="opt on"><span class="radio"></span>אפשר כל הזמן</div>
+        <div class="opt"><span class="radio"></span>רק בזמן שימוש באפליקציה</div>
+        <div class="opt"><span class="radio"></span>שאל בכל פעם</div>
+      </div>
+      <p class="cap">חזרו על אותו הדבר גם עבור Bluetooth</p>
+    </div>
+
+    <div class="check">
+      <h3>איך יודעים שזה עבד?</h3>
+      <ul>
+        <li>התקרבו לדלת עם הטלפון בכיס והמסך כבוי — הדלת אמורה להיפתח לבד.</li>
+        <li>אם אחרי יום‑יומיים הפתיחה האוטומטית הפסיקה — כנראה הגדרת הסוללה חזרה; בדקו שוב את שלב 1.</li>
+      </ul>
+    </div>
+
+    <p class="foot">
+      נתקלתם בקושי? פנו ל<b>ועד הבית</b> ותקבלו עזרה בהגדרה.<br>
+      פתיחה ידנית ופתיחה מרחוק עובדות תמיד — גם בלי ההגדרות האלה.
+    </p>
+
+  </div>
+</div>
